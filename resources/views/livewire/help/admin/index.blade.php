@@ -36,10 +36,8 @@ new class extends Component {
 
     public function mount()
     {
-        if (!auth()->user()->can('view help categories') && !auth()->user()->can('view help articles')) {
-            $this->error('Unauthorized access to help management.');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', HelpCategory::class);
+        $this->authorize('viewAny', HelpArticle::class);
         $this->loadData();
     }
 
@@ -53,9 +51,7 @@ new class extends Component {
 
     public function createCategory()
     {
-        if (!auth()->user()->can('create help categories')) {
-            abort(403);
-        }
+        $this->authorize('create', HelpCategory::class);
         $this->reset(['category_id', 'category_name', 'category_description', 'category_order', 'category_is_active']);
         $this->category_is_active = true;
         $this->showCategoryModal = true;
@@ -63,9 +59,7 @@ new class extends Component {
 
     public function editCategory(HelpCategory $category)
     {
-        if (!auth()->user()->can('edit help categories')) {
-            abort(403);
-        }
+        $this->authorize('update', $category);
         $this->category_id = $category->id;
         $this->category_name = $category->name;
         $this->category_description = $category->description;
@@ -92,19 +86,16 @@ new class extends Component {
         ];
 
         if ($this->category_id) {
-            if (!auth()->user()->can('edit help categories')) {
-                abort(403);
-            }
-            HelpCategory::find($this->category_id)->update($data);
+            $category = HelpCategory::find($this->category_id);
+            $this->authorize('update', $category);
+            $category->update($data);
             $this->success('Category updated.');
         } else {
-            if (!auth()->user()->can('create help categories')) {
-                abort(403);
-            }
+            $this->authorize('create', HelpCategory::class);
             HelpCategory::create($data);
             $this->success('Category created.');
         }
-
+        
         $this->showCategoryModal = false;
         $this->loadData();
     }
@@ -113,9 +104,7 @@ new class extends Component {
 
     public function createArticle()
     {
-        if (!auth()->user()->can('create help articles')) {
-            abort(403);
-        }
+        $this->authorize('create', HelpArticle::class);
         $this->reset(['article_id', 'article_title', 'article_content', 'article_category_id', 'article_is_published', 'article_order']);
         $this->article_is_published = true;
         $this->article_category_id = $this->categories->first()->id ?? null;
@@ -124,9 +113,7 @@ new class extends Component {
 
     public function editArticle(HelpArticle $article)
     {
-        if (!auth()->user()->can('edit help articles')) {
-            abort(403);
-        }
+        $this->authorize('update', $article);
         $this->article_id = $article->id;
         $this->article_title = $article->title;
         $this->article_content = $article->content;
@@ -138,7 +125,7 @@ new class extends Component {
 
     public function saveArticle()
     {
-        $validated = $this->validate([
+        $this->validate([
             'article_title' => 'required|string|max:255',
             'article_content' => 'required|string',
             'article_category_id' => 'required|exists:help_categories,id',
@@ -156,35 +143,25 @@ new class extends Component {
         ];
 
         if ($this->article_id) {
-            if (!auth()->user()->can('edit help articles')) {
-                abort(403);
-            }
-            HelpArticle::find($this->article_id)->update($data);
+            $article = HelpArticle::find($this->article_id);
+            $this->authorize('update', $article);
+            $article->update($data);
             $this->success('Article updated.');
         } else {
-            if (!auth()->user()->can('create help articles')) {
-                abort(403);
-            }
+            $this->authorize('create', HelpArticle::class);
             HelpArticle::create($data);
             $this->success('Article created.');
         }
-
         $this->showArticleModal = false;
         $this->loadData();
     }
 
-    // --- Deletion ---
-
     public function confirmDelete($type, $id)
     {
         if ($type === 'category') {
-            if (!auth()->user()->can('delete help categories')) {
-                abort(403);
-            }
+            $this->authorize('delete', HelpCategory::find($id));
         } else {
-            if (!auth()->user()->can('delete help articles')) {
-                abort(403);
-            }
+            $this->authorize('delete', HelpArticle::find($id));
         }
         $this->deleteType = $type;
         $this->deleteId = $id;
@@ -194,16 +171,14 @@ new class extends Component {
     public function delete()
     {
         if ($this->deleteType === 'category') {
-            if (!auth()->user()->can('delete help categories')) {
-                abort(403);
-            }
-            HelpCategory::find($this->deleteId)->delete();
+            $category = HelpCategory::find($this->deleteId);
+            $this->authorize('delete', $category);
+            $category->delete();
             $this->success('Category deleted.');
         } else {
-            if (!auth()->user()->can('delete help articles')) {
-                abort(403);
-            }
-            HelpArticle::find($this->deleteId)->delete();
+            $article = HelpArticle::find($this->deleteId);
+            $this->authorize('delete', $article);
+            $article->delete();
             $this->success('Article deleted.');
         }
         $this->showDeleteModal = false;
@@ -212,18 +187,16 @@ new class extends Component {
 
     public function togglePublished($id)
     {
-        if (!auth()->user()->can('edit help articles')) {
-            abort(403);
-        }
         $article = HelpArticle::find($id);
+        $this->authorize('update', $article);
         $article->update(['is_published' => !$article->is_published]);
         $this->success('Article status updated.');
         $this->loadData();
     }
 }; ?>
 
-<div class="p-4 md:p-8 max-w-7xl mx-auto">
-    <x-mary-header title="Help Center Management" subtitle="Manage categories and articles." separator>
+<div>
+    <x-mary-header title="Help Center Management" separator>
         <x-slot:actions>
             @can('create help categories')
                 <x-mary-button label="New Category" icon="o-folder-plus" wire:click="createCategory" class="btn-outline" />

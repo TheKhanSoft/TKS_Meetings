@@ -23,10 +23,7 @@ new class extends Component {
 
     public function mount()
     {
-        if (!auth()->user()->can('view permissions')) {
-            $this->error('Unauthorized access. Redirecting to dashboard...');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', Permission::class);
         $this->loadPermissions();
     }
 
@@ -44,9 +41,7 @@ new class extends Component {
 
     public function create()
     {
-        if (!auth()->user()->can('create permissions')) {
-            abort(403);
-        }
+        $this->authorize('create', Permission::class);
         $this->reset(['id', 'name']);
         $this->editMode = false;
         $this->showModal = true;
@@ -54,9 +49,7 @@ new class extends Component {
 
     public function edit(Permission $permission)
     {
-        if (!auth()->user()->can('edit permissions')) {
-            abort(403);
-        }
+        $this->authorize('update', $permission);
         $this->id = $permission->id;
         $this->name = $permission->name;
         $this->editMode = true;
@@ -84,21 +77,16 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        if (!auth()->user()->can('delete permissions')) {
-            abort(403);
-        }
+        $this->authorize('delete', Permission::find($id));
         $this->permissionToDeleteId = $id;
         $this->showDeleteModal = true;
     }
 
     public function delete()
     {
-        if (!auth()->user()->can('delete permissions')) {
-            abort(403);
-        }
         $permission = Permission::find($this->permissionToDeleteId);
+        $this->authorize('delete', $permission);
         $permission->delete();
-        $this->success('Permission deleted successfully.');
         $this->showDeleteModal = false;
         $this->loadPermissions();
     }

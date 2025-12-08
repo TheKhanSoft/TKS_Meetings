@@ -62,10 +62,7 @@ new class extends Component {
 
     public function mount(UserService $userService)
     {
-        if (!Auth::user()->can('view users')) {
-            $this->error('Unauthorized access.');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', User::class);
 
         $this->loadDropdowns();
         $this->loadUsers($userService);
@@ -119,7 +116,7 @@ new class extends Component {
 
     public function create()
     {
-        $this->authorizeAction('create users');
+        $this->authorize('create', User::class);
         $this->resetForm();
         $this->employment_status_id = EmploymentStatus::where('code', 'working')->value('id');
         $this->editMode = false;
@@ -130,7 +127,7 @@ new class extends Component {
 
     public function edit(User $user)
     {
-        $this->authorizeAction('edit users');
+        $this->authorize('update', $user);
 
         // Super Admin Protection
         if ($user->hasRole('Super Admin') && !Auth::user()->hasRole('Super Admin')) {
@@ -204,7 +201,7 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        $this->authorizeAction('delete users');
+        $this->authorize('delete', User::find($id));
         $this->userToDeleteId = $id;
         $this->showDeleteModal = true;
     }
@@ -213,6 +210,7 @@ new class extends Component {
     {
         try {
             $user = User::find($this->userToDeleteId);
+            $this->authorize('delete', $user);
             if ($user->hasRole('Super Admin')) {
                 $this->error('Cannot delete Super Admin.');
                 return;
@@ -226,11 +224,11 @@ new class extends Component {
             $this->loadUsers($service);
         }
     }
-
     public function restore($id)
     {
-        $this->authorizeAction('restore users');
-        User::withTrashed()->find($id)->restore();
+        $user = User::withTrashed()->find($id);
+        $this->authorize('restore', $user);
+        $user->restore();
         $this->success('User restored.');
         $this->loadUsers(app(UserService::class));
     }

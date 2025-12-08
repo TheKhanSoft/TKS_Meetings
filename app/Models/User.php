@@ -95,4 +95,28 @@ class User extends Authenticatable
                     ->withPivot('type')
                     ->withTimestamps();
     }
+
+    public function allowedMeetingTypes()
+    {
+        return $this->belongsToMany(MeetingType::class, 'meeting_type_user')
+                    ->withPivot('permissions')
+                    ->withTimestamps();
+    }
+
+    public function hasMeetingPermission($meetingTypeId, $action): bool
+    {
+        $assignment = $this->allowedMeetingTypes
+                           ->where('id', $meetingTypeId)
+                           ->first();
+
+        if (! $assignment) {
+            return false;
+        }
+
+        $permissions = is_string($assignment->pivot->permissions) 
+            ? json_decode($assignment->pivot->permissions, true) 
+            : $assignment->pivot->permissions;
+
+        return in_array($action, $permissions ?? []);
+    }
 }

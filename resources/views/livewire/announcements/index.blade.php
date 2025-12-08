@@ -25,10 +25,7 @@ new class extends Component {
 
     public function mount()
     {
-        if (!auth()->user()->can('view announcements')) {
-            $this->error('Unauthorized access to announcements.');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', Announcement::class);
         $this->loadAnnouncements();
     }
 
@@ -50,9 +47,7 @@ new class extends Component {
 
     public function create()
     {
-        if (!auth()->user()->can('create announcements')) {
-            abort(403);
-        }
+        $this->authorize('create', Announcement::class);
         $this->reset(['id', 'title', 'content', 'published_at', 'expires_at', 'is_active']);
         $this->is_active = true;
         $this->editMode = false;
@@ -61,9 +56,7 @@ new class extends Component {
 
     public function edit(Announcement $announcement)
     {
-        if (!auth()->user()->can('edit announcements')) {
-            abort(403);
-        }
+        $this->authorize('update', $announcement);
         $this->id = $announcement->id;
         $this->title = $announcement->title;
         $this->content = $announcement->content;
@@ -102,19 +95,16 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        if (!auth()->user()->can('delete announcements')) {
-            abort(403);
-        }
+        $this->authorize('delete', Announcement::find($id));
         $this->announcementToDeleteId = $id;
         $this->showDeleteModal = true;
     }
 
     public function delete()
     {
-        if (!auth()->user()->can('delete announcements')) {
-            abort(403);
-        }
-        Announcement::find($this->announcementToDeleteId)->delete();
+        $announcement = Announcement::find($this->announcementToDeleteId);
+        $this->authorize('delete', $announcement);
+        $announcement->delete();
         $this->success('Announcement deleted successfully.');
         $this->showDeleteModal = false;
         $this->loadAnnouncements();
@@ -122,10 +112,8 @@ new class extends Component {
 
     public function toggleActive($id)
     {
-        if (!auth()->user()->can('edit announcements')) {
-            abort(403);
-        }
         $announcement = Announcement::find($id);
+        $this->authorize('update', $announcement);
         $announcement->is_active = !$announcement->is_active;
         $announcement->save();
         $this->loadAnnouncements();

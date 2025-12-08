@@ -62,10 +62,7 @@ new class extends Component {
 
     public function mount(AgendaItemService $service)
     {
-        if (!auth()->user()->can('view agenda items')) {
-            $this->error('Unauthorized access to agenda items.');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', AgendaItem::class);
 
         $this->meetings = Meeting::all();
         $this->agendaItemTypes = AgendaItemType::where('is_active', true)->get();
@@ -138,10 +135,7 @@ new class extends Component {
 
     public function create()
     {
-        if (!auth()->user()->can('create agenda items')) {
-            $this->error('You do not have permission to create agenda items.');
-            return;
-        }
+        $this->authorize('create', AgendaItem::class);
 
         $this->reset(['id', 'meeting_id', 'agenda_item_type_id', 'sequence_number', 'title', 'details', 'owner_user_id', 'discussion_status', 'is_left_over', 'selectedKeywords']);
         $this->discussion_status = 'pending';
@@ -154,15 +148,9 @@ new class extends Component {
 
     public function edit(AgendaItem $agendaItem)
     {
-        if (!auth()->user()->can('edit agenda items')) {
-            $this->error('You do not have permission to edit agenda items.');
-            return;
-        }
+        $this->authorize('update', $agendaItem);
 
         $this->fillForm($agendaItem);
-        $this->editMode = true;
-        $this->viewMode = false;
-        $this->showModal = true;
     }
 
     public function view(AgendaItem $agendaItem)
@@ -227,10 +215,7 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        if (!auth()->user()->can('delete agenda items')) {
-            $this->error('You do not have permission to delete agenda items.');
-            return;
-        }
+        $this->authorize('delete', AgendaItem::find($id));
 
         $this->itemToDeleteId = $id;
         $this->showDeleteModal = true;
@@ -238,7 +223,9 @@ new class extends Component {
 
     public function delete(AgendaItemService $service)
     {
-        $service->deleteAgendaItem(AgendaItem::find($this->itemToDeleteId));
+        $item = AgendaItem::find($this->itemToDeleteId);
+        $this->authorize('delete', $item);
+        $service->deleteAgendaItem($item);
         $this->success('Item deleted.');
         $this->showDeleteModal = false;
         $this->loadAgendaItems($service);
@@ -246,7 +233,9 @@ new class extends Component {
 
     public function restore($id)
     {
-        AgendaItem::withTrashed()->find($id)->restore();
+        $item = AgendaItem::withTrashed()->find($id);
+        $this->authorize('restore', $item);
+        $item->restore();
         $this->success('Item restored.');
         $this->loadAgendaItems(app(AgendaItemService::class));
     }
@@ -254,17 +243,15 @@ new class extends Component {
     public function toggleStatus($id)
     {
         $agendaItem = AgendaItem::find($id);
+        $this->authorize('update', $agendaItem);
         $agendaItem->is_left_over = !$agendaItem->is_left_over;
         $agendaItem->save();
-        $this->success('Leftover status updated.');
-        $this->loadAgendaItems(app(AgendaItemService::class));
     }
 
     public function bulkDelete()
-    {
-        if (!auth()->user()->can('delete agenda items')) {
-            $this->error('Unauthorized.');
-            return;
+    {   $items = AgendaItem::whereIn('id', $this->selected)->get();
+        foreach ($items as $item) {
+            $this->authorize('delete', $item);
         }
 
         AgendaItem::whereIn('id', $this->selected)->delete();
@@ -275,9 +262,9 @@ new class extends Component {
 
     public function bulkRestore()
     {
-        if (!auth()->user()->can('delete agenda items')) {
-            $this->error('Unauthorized.');
-            return;
+        $items = AgendaItem::withTrashed()->whereIn('id', $this->selected)->get();
+        foreach ($items as $item) {
+            $this->authorize('restore', $item);
         }
 
         AgendaItem::withTrashed()->whereIn('id', $this->selected)->restore();
@@ -288,9 +275,9 @@ new class extends Component {
 
     public function bulkStatus($status)
     {
-        if (!auth()->user()->can('edit agenda items')) {
-            $this->error('Unauthorized.');
-            return;
+        $items = AgendaItem::whereIn('id', $this->selected)->get();
+        foreach ($items as $item) {
+            $this->authorize('update', $item);
         }
 
         AgendaItem::whereIn('id', $this->selected)->update(['discussion_status' => $status]);
@@ -298,7 +285,6 @@ new class extends Component {
         $this->selected = [];
         $this->loadAgendaItems(app(AgendaItemService::class));
     }
-
     // (Kept Export/Import/Download for brevity - they remain unchanged)
     public function export($format = 'pdf')
     {

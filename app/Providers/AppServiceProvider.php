@@ -4,7 +4,12 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Gate;
 use Mary\View\Components\Spotlight;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
+use App\Policies\RolePolicy;
+use App\Policies\PermissionPolicy;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,6 +26,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::policy(Role::class, RolePolicy::class);
+        Gate::policy(Permission::class, PermissionPolicy::class);
+
         Blade::component('mary-spotlight', Spotlight::class);
     }
 }

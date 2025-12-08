@@ -43,10 +43,7 @@ new class extends Component {
 
     public function mount()
     {
-        if (!auth()->user()->can('view positions')) {
-            $this->error('Unauthorized access. Redirecting to dashboard...');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', Position::class);
 
         $this->roles = Role::all();
         $this->loadPositions();
@@ -78,10 +75,7 @@ new class extends Component {
 
     public function create()
     {
-        if (!auth()->user()->can('create positions')) {
-            $this->error('You do not have permission to create positions.');
-            return;
-        }
+        $this->authorize('create', Position::class);
 
         $this->reset(['id', 'name', 'code', 'is_unique', 'role_id']);
         $this->editMode = false;
@@ -91,10 +85,7 @@ new class extends Component {
 
     public function edit(Position $position)
     {
-        if (!auth()->user()->can('edit positions')) {
-            $this->error('You do not have permission to edit positions.');
-            return;
-        }
+        $this->authorize('update', $position);
 
         $this->fillForm($position);
         $this->editMode = true;
@@ -157,10 +148,7 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        if (!auth()->user()->can('delete positions')) {
-            $this->error('You do not have permission to delete positions.');
-            return;
-        }
+        $this->authorize('delete', Position::find($id));
 
         $this->positionToDeleteId = $id;
         $this->showDeleteModal = true;
@@ -169,9 +157,10 @@ new class extends Component {
     public function delete()
     {
         $position = Position::find($this->positionToDeleteId);
+        $this->authorize('delete', $position);
         
         if ($position->code === 'super_admin') {
-            $this->error('Cannot delete the Super Admin position.');
+            $this->error('Cannot delete Super Admin position.');
             $this->showDeleteModal = false;
             return;
         }

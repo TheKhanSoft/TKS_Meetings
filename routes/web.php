@@ -38,6 +38,7 @@ Route::middleware(['auth'])->group(function () {
     Volt::route('users/{user}/positions', 'users.positions')->name('users.positions');
     Volt::route('positions', 'positions.index')->name('positions.index');
     Volt::route('meeting-types', 'meeting-types.index')->name('meeting-types.index');
+    Volt::route('meeting-types/{meetingType}/permissions', 'meeting-types.permissions')->name('meeting-types.permissions');
     Volt::route('meetings', 'meetings.index')->name('meetings.index');
     Volt::route('agenda-item-types', 'agenda-item-types.index')->name('agenda-item-types.index');
     Volt::route('agenda-items', 'agenda-items.index')->name('agenda-items.index');

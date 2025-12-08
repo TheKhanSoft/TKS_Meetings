@@ -54,10 +54,7 @@ new class extends Component {
 
     public function mount(MinuteService $service)
     {
-        if (!auth()->user()->can('view minutes')) {
-            $this->error('Unauthorized access. Redirecting to dashboard...');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', Minute::class);
 
         $this->loadMinutes($service);
         $this->agendaItems = AgendaItem::all();
@@ -169,10 +166,7 @@ new class extends Component {
 
     public function create()
     {
-        if (!auth()->user()->can('create minutes')) {
-            $this->error('You do not have permission to create minutes.');
-            return;
-        }
+        $this->authorize('create', Minute::class);
 
         $this->reset(['id', 'agenda_item_id', 'decision', 'action_required', 'approval_status', 'responsible_user_id', 'target_due_date', 'selectedKeywords']);
         $this->approval_status = 'draft';
@@ -195,10 +189,7 @@ new class extends Component {
 
     public function edit(Minute $minute)
     {
-        if (!auth()->user()->can('edit minutes')) {
-            $this->error('You do not have permission to edit minutes.');
-            return;
-        }
+        $this->authorize('update', $minute);
 
         $this->fillForm($minute);
         $this->editMode = true;
@@ -254,10 +245,7 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        if (!auth()->user()->can('delete minutes')) {
-            $this->error('You do not have permission to delete minutes.');
-            return;
-        }
+        $this->authorize('delete', Minute::find($id));
 
         $this->minuteToDeleteId = $id;
         $this->showDeleteModal = true;
@@ -265,7 +253,9 @@ new class extends Component {
 
     public function delete(MinuteService $service)
     {
-        $service->deleteMinute(Minute::find($this->minuteToDeleteId));
+        $minute = Minute::find($this->minuteToDeleteId);
+        $this->authorize('delete', $minute);
+        $service->deleteMinute($minute);
         $this->success('Minute deleted successfully.');
         $this->showDeleteModal = false;
         $this->loadMinutes($service);
@@ -273,7 +263,9 @@ new class extends Component {
 
     public function restore($id)
     {
-        Minute::withTrashed()->find($id)->restore();
+        $minute = Minute::withTrashed()->find($id);
+        $this->authorize('restore', $minute);
+        $minute->restore();
         $this->success('Minute restored successfully.');
         $this->loadMinutes(app(MinuteService::class));
     }
@@ -281,17 +273,16 @@ new class extends Component {
     public function toggleStatus($id)
     {
         $minute = Minute::find($id);
+        $this->authorize('update', $minute);
         $minute->approval_status = $minute->approval_status === 'approved' ? 'draft' : 'approved';
         $minute->save();
-        $this->success('Minute status updated successfully.');
-        $this->loadMinutes(app(MinuteService::class));
     }
 
     public function bulkDelete()
     {
-        if (!auth()->user()->can('delete minutes')) {
-            $this->error('Unauthorized.');
-            return;
+        $minutes = Minute::whereIn('id', $this->selected)->get();
+        foreach ($minutes as $minute) {
+            $this->authorize('delete', $minute);
         }
 
         Minute::whereIn('id', $this->selected)->delete();
@@ -302,9 +293,9 @@ new class extends Component {
 
     public function bulkRestore()
     {
-        if (!auth()->user()->can('delete minutes')) {
-            $this->error('Unauthorized.');
-            return;
+        $minutes = Minute::withTrashed()->whereIn('id', $this->selected)->get();
+        foreach ($minutes as $minute) {
+            $this->authorize('restore', $minute);
         }
 
         Minute::withTrashed()->whereIn('id', $this->selected)->restore();
@@ -312,7 +303,6 @@ new class extends Component {
         $this->selected = [];
         $this->loadMinutes(app(MinuteService::class));
     }
-
     public function bulkStatus($status)
     {
         if (!auth()->user()->can('edit minutes')) {

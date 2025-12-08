@@ -24,6 +24,7 @@ new class extends Component {
     // public $meetings; // Removed for pagination
     public string $search = '';
     public $meetingTypes;
+    public $creatableMeetingTypes = [];
     
     // Settings
     public $perPage = 15;
@@ -111,12 +112,22 @@ new class extends Component {
         view()->share('page_title', $this->pageTitle);
         view()->share('page_subtitle', $this->pageSubtitle);
 
-        if (!auth()->user()->can('view meetings')) {
-            $this->error('Unauthorized access. Redirecting to dashboard...');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', Meeting::class);
 
-        $this->meetingTypes = MeetingType::where('is_active', true)->orderBy('id')->get();
+        $user = auth()->user();
+        $allTypes = MeetingType::where('is_active', true)->orderBy('id')->get();
+
+        // Filter for View/Filter
+        $this->meetingTypes = $allTypes->filter(function($type) use ($user) {
+             if ($user->hasRole('Super Admin')) return true;
+             return $user->can('access meetings') || $user->hasMeetingPermission($type->id, 'view');
+        });
+
+        // Filter for Create
+        $this->creatableMeetingTypes = $allTypes->filter(function($type) use ($user) {
+             if ($user->hasRole('Super Admin')) return true;
+             return $user->hasMeetingPermission($type->id, 'create');
+        });
         
         // Load users by Role
         $this->directors = User::role('Director')->orderBy('name')->get();
@@ -155,6 +166,10 @@ new class extends Component {
     public function getMeetingsQuery()
     {
         $query = Meeting::query();
+
+        // Filter by allowed meeting types
+        $allowedTypeIds = $this->meetingTypes->pluck('id');
+        $query->whereIn('meeting_type_id', $allowedTypeIds);
 
         if ($this->showDeleted) {
             $query->onlyTrashed();
@@ -285,8 +300,10 @@ new class extends Component {
     // --- CRUD Actions ---
     public function create()
     {
-        if (!auth()->user()->can('create meetings')) {
-            $this->error('You do not have permission to create meetings.');
+        $this->authorize('create', Meeting::class);
+
+        if ($this->creatableMeetingTypes->isEmpty()) {
+            $this->error('You do not have permission to create any meetings.');
             return;
         }
 
@@ -298,10 +315,7 @@ new class extends Component {
 
     public function edit(Meeting $meeting)
     {
-        if (!auth()->user()->can('edit meetings')) {
-            $this->error('You do not have permission to edit meetings.');
-            return;
-        }
+        $this->authorize('update', $meeting);
 
         $this->fillForm($meeting);
         $this->editMode = true;
@@ -382,10 +396,7 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        if (!auth()->user()->can('delete meetings')) {
-            $this->error('You do not have permission to delete meetings.');
-            return;
-        }
+        $this->authorize('delete', Meeting::find($id));
 
         $this->meetingToDeleteId = $id;
         $this->showDeleteModal = true;
@@ -393,7 +404,9 @@ new class extends Component {
 
     public function delete(MeetingService $service)
     {
-        $service->deleteMeeting(Meeting::find($this->meetingToDeleteId));
+        $meeting = Meeting::find($this->meetingToDeleteId);
+        $this->authorize('delete', $meeting);
+        $service->deleteMeeting($meeting);
         $this->success('Meeting deleted successfully.');
         $this->showDeleteModal = false;
         $this->resetPage();
@@ -401,7 +414,9 @@ new class extends Component {
 
     public function restore($id)
     {
-        Meeting::withTrashed()->find($id)->restore();
+        $meeting = Meeting::withTrashed()->find($id);
+        $this->authorize('restore', $meeting);
+        $meeting->restore();
         $this->success('Meeting restored successfully.');
         $this->resetPage();
     }
@@ -409,9 +424,11 @@ new class extends Component {
     public function toggleStatus($id)
     {
         $meeting = Meeting::find($id);
+        $this->authorize('update', $meeting);
         $meeting->is_last = !$meeting->is_last;
         $meeting->save();
         $this->success('Status updated.');
+   
         $this->resetPage();
     }
 
@@ -919,7 +936,7 @@ new class extends Component {
                     <div class="text-sm font-bold text-gray-500 uppercase tracking-wide pb-5">Schedule & Type</div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3 md:mb-3">
                         <div class="grid grid-cols-1 md:grid-cols-1">
-                            <x-mary-select label="Type" wire:model="meeting_type_id" :options="$meetingTypes" option-label="name" option-value="id" placeholder="Select Type"  inline />
+                            <x-mary-select label="Type" wire:model="meeting_type_id" :options="$creatableMeetingTypes" option-label="name" option-value="id" placeholder="Select Type"  inline />
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                             <x-mary-datetime label="Date" wire:model="date"  inline />

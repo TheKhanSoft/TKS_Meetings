@@ -41,10 +41,7 @@ new class extends Component {
 
     public function mount(NotificationService $service)
     {
-        if (!auth()->user()->can('view notifications')) {
-            $this->error('Unauthorized access. Redirecting to dashboard...');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', Notification::class);
         $this->loadNotifications($service);
         $this->minutes = Minute::with('agendaItem')->get();
     }
@@ -94,9 +91,7 @@ new class extends Component {
 
     public function create()
     {
-        if (!auth()->user()->can('create notifications')) {
-            abort(403);
-        }
+        $this->authorize('create', Notification::class);
         $this->reset(['id', 'minute_id', 'notification_no', 'notification_date']);
         $this->editMode = false;
         $this->viewMode = false;
@@ -113,9 +108,7 @@ new class extends Component {
 
     public function edit(Notification $notification)
     {
-        if (!auth()->user()->can('edit notifications')) {
-            abort(403);
-        }
+        $this->authorize('update', $notification);
         $this->fillForm($notification);
         $this->editMode = true;
         $this->viewMode = false;
@@ -160,19 +153,16 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        if (!auth()->user()->can('delete notifications')) {
-            abort(403);
-        }
+        $this->authorize('delete', Notification::find($id));
         $this->notificationToDeleteId = $id;
         $this->showDeleteModal = true;
     }
 
     public function delete(NotificationService $service)
     {
-        if (!auth()->user()->can('delete notifications')) {
-            abort(403);
-        }
-        $service->deleteNotification(Notification::find($this->notificationToDeleteId));
+        $notification = Notification::find($this->notificationToDeleteId);
+        $this->authorize('delete', $notification);
+        $service->deleteNotification($notification);
         $this->success('Notification deleted successfully.');
         $this->showDeleteModal = false;
         $this->loadNotifications($service);
@@ -180,10 +170,9 @@ new class extends Component {
 
     public function restore($id)
     {
-        if (!auth()->user()->can('delete notifications')) {
-            abort(403);
-        }
-        Notification::withTrashed()->find($id)->restore();
+        $notification = Notification::withTrashed()->find($id);
+        $this->authorize('restore', $notification);
+        $notification->restore();
         $this->success('Notification restored successfully.');
         $this->loadNotifications(app(NotificationService::class));
     }

@@ -50,6 +50,8 @@ new class extends Component {
 
     public function with(): array
     {
+        $this->authorize('viewAny', Participant::class);
+
         $query = Participant::query();
 
         if ($this->search) {
@@ -74,6 +76,7 @@ new class extends Component {
 
     public function create()
     {
+        $this->authorize('create', Participant::class);
         $this->reset(['id', 'title', 'name', 'email', 'phone', 'address', 'designation', 'organization']);
         $this->editMode = false;
         $this->viewMode = false;
@@ -82,14 +85,15 @@ new class extends Component {
 
     public function edit(Participant $participant)
     {
+        $this->authorize('update', $participant);
         $this->fillForm($participant);
         $this->editMode = true;
         $this->viewMode = false;
         $this->showModal = true;
     }
-
     public function view(Participant $participant)
     {
+        $this->authorize('view', $participant);
         $this->fillForm($participant);
         $this->editMode = false;
         $this->viewMode = true;
@@ -116,12 +120,13 @@ new class extends Component {
         }
 
         $validated = $this->validate();
-
         if ($this->editMode) {
             $participant = Participant::find($this->id);
+            $this->authorize('update', $participant);
             $participant->update($validated);
             $this->success('Participant updated successfully.');
         } else {
+            $this->authorize('create', Participant::class);
             Participant::create($validated);
             $this->success('Participant created successfully.');
         }
@@ -131,6 +136,7 @@ new class extends Component {
 
     public function delete(Participant $participant)
     {
+        $this->authorize('delete', $participant);
         $participant->delete();
         $this->success('Participant deleted successfully.');
     }

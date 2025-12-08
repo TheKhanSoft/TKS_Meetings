@@ -4,6 +4,7 @@ use Livewire\Volt\Component;
 use App\Models\Keyword;
 use Mary\Traits\Toast;
 use Livewire\WithPagination;
+use Illuminate\Validation\Rule;
 
 new class extends Component {
     use Toast, WithPagination;
@@ -13,43 +14,54 @@ new class extends Component {
     public $editing = null;
     public $name = '';
 
-    // Sort by usage count (descending) so 'hot' keywords appear first
-    public $sortBy = ['column' => 'usage_count', 'direction' => 'desc']; 
-
-    public function keywords()
+    public function with(): array
     {
-        return Keyword::query()
-            ->when($this->search, fn($q) => $q->where('name', 'like', "%{$this->search}%"))
-            ->withCount(['agendaItems', 'minutes'])
-            ->orderBy('name', 'asc')
-            ->paginate(20);
+        $this->authorize('viewAny', Keyword::class);
+        return [
+            'keywords' => Keyword::query()
+                ->when($this->search, fn($q) => $q->where('name', 'like', "%{$this->search}%"))
+                ->withCount(['agendaItems', 'minutes']) 
+                ->orderBy('name', 'asc')
+                ->paginate(20)
+        ];
     }
 
     public function create()
     {
+        $this->authorize('create', Keyword::class);
         $this->reset(['name', 'editing']);
+        $this->resetValidation();
         $this->modal = true;
     }
 
     public function edit(Keyword $keyword)
     {
+        $this->authorize('update', $keyword);
         $this->editing = $keyword;
         $this->name = $keyword->name;
+        $this->resetValidation();
         $this->modal = true;
     }
 
     public function save()
     {
         $this->validate([
-            'name' => 'required|string|max:255|unique:keywords,name,' . ($this->editing->id ?? 'NULL'),
+            'name' => [
+                'required', 
+                'string', 
+                'max:255', 
+                Rule::unique('keywords')->ignore($this->editing->id ?? null)
+            ],
         ]);
 
         if ($this->editing) {
+            $this->authorize('update', $this->editing);
             $this->editing->update(['name' => $this->name]);
-            $this->success('Keyword updated.');
+            $this->success('Keyword updated successfully.');
         } else {
+            $this->authorize('create', Keyword::class);
             Keyword::create(['name' => $this->name]);
-            $this->success('Keyword created.');
+            $this->success('Keyword created successfully.');
         }
 
         $this->modal = false;
@@ -57,89 +69,125 @@ new class extends Component {
 
     public function delete(Keyword $keyword)
     {
+        $this->authorize('delete', $keyword);
+        
+        // Optional: Check usage before delete
+        if($keyword->agenda_items_count > 0 || $keyword->minutes_count > 0) {
+            $this->error("Cannot delete keyword currently in use.");
+            return;
+        }
+
         $keyword->delete();
         $this->success('Keyword deleted.');
     }
 }; ?>
 
-<div class="space-y-6">
-    <div class="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
-        <div>
-            <h1 class="text-2xl font-bold text-base-content">Keywords Library</h1>
-            <p class="text-sm text-gray-500">Manage tags and their usage across agendas</p>
-        </div>
-        <div class="flex gap-2 w-full md:w-auto">
-            <x-mary-input 
-                icon="o-magnifying-glass" 
-                placeholder="Search..." 
-                wire:model.live.debounce="search" 
-                class="w-full md:w-64"
-            />
-            <x-mary-button icon="o-plus" class="btn-primary" wire:click="create" label="Add New" responsive />
-        </div>
-    </div>
+<div>
+    {{-- Consistent Header Component --}}
+    <x-mary-header title="Keywords Library" subtitle="Manage tags and their usage across system" separator progress-indicator>
+        <x-slot:middle class="!justify-end">
+            <x-mary-input icon="o-magnifying-glass" placeholder="Search keywords..." wire:model.live.debounce="search" />
+        </x-slot:middle>
+        <x-slot:actions>
+            @can('create keywords')
+                <x-mary-button icon="o-plus" class="btn-primary" wire:click="create" label="Add Keyword" />
+            @endcan
+        </x-slot:actions>
+    </x-mary-header>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        
-        @forelse($this->keywords() as $keyword)
-            <div class="card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-shadow group">
-                <div class="card-body px-4 py-3">
+    {{-- Grid Layout --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        @forelse($keywords as $keyword)
+            <div 
+                wire:key="keyword-{{ $keyword->id }}"
+                wire:click="edit({{ $keyword->id }})"
+                class="card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-all duration-200 group flex flex-col justify-between cursor-pointer"
+            >
+                {{-- Card Top: Content --}}
+                <div class="card-body p-5">
+                    <div class="flex justify-between items-start">
+                        <div class="flex gap-3 items-center w-full">
+                            {{-- Visual "Hash" Icon for Tag feel --}}
+                            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                <span class="font-bold text-lg">#</span>
+                            </div>
+                            
+                            {{-- Keyword Name --}}
+                            <div class="min-w-0 flex-1">
+                                <h3 class="font-bold text-base-content text-lg truncate" title="{{ $keyword->name }}">
+                                    {{ $keyword->name }}
+                                </h3>
+                                <p class="text-xs text-gray-500">
+                                    ID: {{ $keyword->id }}
+                                </p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                {{-- Card Bottom: Usage Stats --}}
+                <div class="bg-base-200/50 border-t border-base-200 py-3 flex justify-between items-center rounded-b-xl text-xs font-medium text-gray-500">
+                    <div class="flex px-5 gap-4">
+                        <span class="flex items-center gap-1.5" title="Used in {{ $keyword->agenda_items_count }} Agendas">
+                            <x-mary-icon name="o-document-text" class="w-3.5 h-3.5 text-blue-500" />
+                            {{ $keyword->agenda_items_count }} Agendas
+                        </span>
+                        <span class="flex items-center gap-1.5" title="Used in {{ $keyword->minutes_count }} Minutes">
+                            <x-mary-icon name="o-clock" class="w-3.5 h-3.5 text-orange-500" />
+                            {{ $keyword->minutes_count }} Minutes
+                        </span>
+                    </div>
                     
-                    <div class="flex justify-between items-start h-14">
-                        <div class="flex items-start gap-2 w-full">
-                            <div class="w-1.5 h-8 bg-primary rounded-full shrink-0 mt-1"></div> 
-                            <h2 class="card-title text-lg font-bold text-base-content line-clamp-2 leading-tight" title="{{ $keyword->name }}">
-                                {{ $keyword->name }}
-                            </h2>
+                    <div class="flex px-0">
+                    {{-- Quick Edit Action on Hover --}}
+                        @can('edit keywords')
+                        <div class="lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                            <x-mary-button 
+                                icon="o-pencil" 
+                                class="btn-ghost btn-xs text-primary" 
+                                wire:click="edit({{ $keyword->id }})" 
+                            />
                         </div>
-                        
-                        <x-mary-dropdown class="btn-sm btn-circle btn-ghost -mr-2 -mt-2" no-x-anchor left>
-                            <x-slot:trigger>
-                                <x-mary-icon name="o-ellipsis-vertical" class="w-5 h-5 text-gray-400 group-hover:text-gray-600" />
-                            </x-slot:trigger>
-                            <x-mary-menu-item title="Edit" icon="o-pencil" wire:click="edit({{ $keyword->id }})" />
-                            <x-mary-menu-item title="Delete" icon="o-trash" class="text-error" wire:click="delete({{ $keyword->id }})" wire:confirm="Delete this keyword?" />
-                        </x-mary-dropdown>
+                        @endcan
+                        @can('delete keywords')
+                        <div class="lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                            <x-mary-button 
+                                icon="o-trash" 
+                                class="btn-ghost btn-xs text-error" 
+                                wire:click="delete({{ $keyword->id }})" 
+                            />
+                        </div>
+                        @endcan
                     </div>
-
-                    <div class="divider my-0"></div>
-
-                    <div class="grid grid-cols-3 gap-2 text-xs">
-                        <div class="flex flex-col items-center bg-base-200/50 p-2 rounded-lg" title="Overall Usage">
-                            <x-mary-icon name="o-chart-bar" class="w-4 h-4 text-primary mb-1" />
-                            <span class="font-bold">{{ $keyword->agenda_items_count + $keyword->minutes_count }}</span>
-                        </div>
-                        <div class="flex flex-col items-center bg-base-200/50 p-2 rounded-lg" title="Agenda Items">
-                            <x-mary-icon name="o-calendar" class="w-4 h-4 text-secondary mb-1" />
-                            <span class="font-bold">{{ $keyword->agenda_items_count }}</span>
-                        </div>
-                        <div class="flex flex-col items-center bg-base-200/50 p-2 rounded-lg" title="Minutes">
-                            <x-mary-icon name="o-clock" class="w-4 h-4 text-accent mb-1" />
-                            <span class="font-bold">{{ $keyword->minutes_count }}</span>
-                        </div>
-                    </div>
-
                 </div>
             </div>
         @empty
-            <div class="col-span-full flex flex-col items-center justify-center p-12 border-2 border-dashed border-base-200 rounded-xl bg-base-50/50">
-                <div class="bg-base-200 p-4 rounded-full mb-4">
-                    <x-mary-icon name="o-rectangle-stack" class="w-8 h-8 text-gray-400" />
+            <div class="col-span-full flex flex-col items-center justify-center py-16 text-center bg-base-100 rounded-xl border border-dashed border-base-300">
+                <div class="bg-base-200 rounded-full p-4 mb-3">
+                    <x-mary-icon name="o-tag" class="w-8 h-8 text-gray-400" />
                 </div>
-                <h3 class="text-lg font-bold text-gray-600">No keywords found</h3>
-                <p class="text-gray-400 text-sm mb-6 text-center max-w-xs">Create your first keyword to start tracking usage across your system.</p>
-                <x-mary-button icon="o-plus" class="btn-primary" label="Create First Keyword" wire:click="create" />
+                <h3 class="font-bold text-lg">No keywords found</h3>
+                <p class="text-gray-500 text-sm max-w-xs mx-auto mb-4">
+                    Get started by adding tags to organize your meeting agendas and minutes.
+                </p>
+                <x-mary-button label="Add First Keyword" icon="o-plus" class="btn-primary btn-sm" wire:click="create" />
             </div>
         @endforelse
     </div>
 
-    <div class="flex justify-center mt-6">
-        {{ $this->keywords()->links() }}
+    {{-- Pagination --}}
+    <div class="mt-6">
+        {{ $keywords->links() }}
     </div>
 
-    <x-mary-modal wire:model="modal" :title="$editing ? 'Edit Keyword' : 'New Keyword'">
-        <x-mary-form wire:submit="save">
-            <x-mary-input label="Name" wire:model="name" />
+    {{-- Create/Edit Modal --}}
+    <x-mary-modal wire:model="modal" class="backdrop-blur">
+        <x-mary-header :title="$editing ? 'Edit Keyword' : 'New Keyword'" :subtitle="$editing ? 'Update tag name' : 'Create a new tag'" separator />
+        
+        <x-mary-form wire:submit="save"> 
+            <x-mary-input label="Keyword Name" wire:model="name" placeholder="e.g. Academic Council" icon="o-tag" />
+            
             <x-slot:actions>
                 <x-mary-button label="Cancel" @click="$wire.modal = false" />
                 <x-mary-button label="Save" class="btn-primary" type="submit" spinner="save" />

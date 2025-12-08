@@ -36,10 +36,7 @@ new class extends Component {
 
     public function mount(AgendaItemTypeService $service)
     {
-        if (!auth()->user()->can('view agenda item types')) {
-            $this->error('Unauthorized access to agenda item types.');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', AgendaItemType::class);
         $this->loadAgendaItemTypes($service);
     }
 
@@ -79,9 +76,7 @@ new class extends Component {
 
     public function create()
     {
-        if (!auth()->user()->can('create agenda item types')) {
-            abort(403);
-        }
+        $this->authorize('create', AgendaItemType::class);
         $this->reset(['id', 'name', 'is_active']);
         $this->is_active = true;
         $this->editMode = false;
@@ -91,9 +86,7 @@ new class extends Component {
 
     public function edit(AgendaItemType $agendaItemType)
     {
-        if (!auth()->user()->can('edit agenda item types')) {
-            abort(403);
-        }
+        $this->authorize('update', $agendaItemType);
         $this->fillForm($agendaItemType);
         $this->editMode = true;
         $this->viewMode = false;
@@ -144,19 +137,16 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        if (!auth()->user()->can('delete agenda item types')) {
-            abort(403);
-        }
+        $this->authorize('delete', AgendaItemType::find($id));
         $this->typeToDeleteId = $id;
         $this->showDeleteModal = true;
     }
 
     public function delete(AgendaItemTypeService $service)
     {
-        if (!auth()->user()->can('delete agenda item types')) {
-            abort(403);
-        }
-        $service->deleteAgendaItemType(AgendaItemType::find($this->typeToDeleteId));
+        $agendaItemType = AgendaItemType::find($this->typeToDeleteId);
+        $this->authorize('delete', $agendaItemType);
+        $service->deleteAgendaItemType($agendaItemType);
         $this->success('Agenda Item Type deleted successfully.');
         $this->showDeleteModal = false;
         $this->loadAgendaItemTypes($service);
@@ -164,20 +154,17 @@ new class extends Component {
 
     public function restore($id)
     {
-        if (!auth()->user()->can('delete agenda item types')) {
-            abort(403);
-        }
-        AgendaItemType::withTrashed()->find($id)->restore();
+        $agendaItemType = AgendaItemType::withTrashed()->find($id);
+        $this->authorize('restore', $agendaItemType);
+        $agendaItemType->restore();
         $this->success('Agenda Item Type restored successfully.');
         $this->loadAgendaItemTypes(app(AgendaItemTypeService::class));
     }
 
     public function toggleStatus($id)
     {
-        if (!auth()->user()->can('edit agenda item types')) {
-            abort(403);
-        }
         $agendaItemType = AgendaItemType::find($id);
+        $this->authorize('update', $agendaItemType);
         $agendaItemType->is_active = !$agendaItemType->is_active;
         $agendaItemType->save();
         $this->success('Agenda Item Type status updated successfully.');

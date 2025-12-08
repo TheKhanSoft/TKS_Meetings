@@ -24,4 +24,11 @@ class MeetingType extends Model
     {
         return $this->hasMany(Meeting::class);
     }
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'meeting_type_user')
+                    ->withPivot('permissions')
+                    ->withTimestamps();
+    }
 }

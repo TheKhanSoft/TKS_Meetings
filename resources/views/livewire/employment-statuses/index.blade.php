@@ -18,10 +18,7 @@ new class extends Component {
 
     public function mount()
     {
-        if (!auth()->user()->can('view employment statuses')) {
-            $this->error('Unauthorized access to employment statuses.');
-            return $this->redirect(route('dashboard'), navigate: true);
-        }
+        $this->authorize('viewAny', EmploymentStatus::class);
         $this->loadStatuses();
     }
 
@@ -32,9 +29,7 @@ new class extends Component {
 
     public function create()
     {
-        if (!auth()->user()->can('create employment statuses')) {
-            abort(403);
-        }
+        $this->authorize('create', EmploymentStatus::class);
         $this->reset(['id', 'name', 'code', 'description']);
         $this->editMode = false;
         $this->showModal = true;
@@ -42,9 +37,7 @@ new class extends Component {
 
     public function edit(EmploymentStatus $status)
     {
-        if (!auth()->user()->can('edit employment statuses')) {
-            abort(403);
-        }
+        $this->authorize('update', $status);
         $this->id = $status->id;
         $this->name = $status->name;
         $this->code = $status->code;
@@ -78,14 +71,13 @@ new class extends Component {
 
     public function delete($id)
     {
-        if (!auth()->user()->can('delete employment statuses')) {
-            abort(403);
-        }
-        EmploymentStatus::find($id)->delete();
+        $status = EmploymentStatus::find($id);
+        $this->authorize('delete', $status);
+        $status->delete();
         $this->success('Status deleted successfully.');
         $this->loadStatuses();
     }
-    
+
     public function with(): array
     {
         return [
