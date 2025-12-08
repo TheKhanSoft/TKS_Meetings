@@ -18,6 +18,9 @@ use App\Models\Setting;
 new class extends Component {
     use Toast, WithFileUploads, WithPagination;
 
+    public string $pageTitle = 'Meetings Management';
+    public string $pageSubtitle = 'Manage all meetings including agenda and minutes records.';
+
     // public $meetings; // Removed for pagination
     public string $search = '';
     public $meetingTypes;
@@ -105,6 +108,9 @@ new class extends Component {
 
     public function mount()
     {
+        view()->share('page_title', $this->pageTitle);
+        view()->share('page_subtitle', $this->pageSubtitle);
+
         if (!auth()->user()->can('view meetings')) {
             $this->error('Unauthorized access. Redirecting to dashboard...');
             return $this->redirect(route('dashboard'), navigate: true);
@@ -557,7 +563,7 @@ new class extends Component {
     }
 }; ?>
 
-<div class="p-4 md:p-8 max-w-7xl mx-auto">
+<div class="p-4 md:p-4 max-w-7xl mx-auto">
     @php
         $hasActiveFilters = $filterMeetingType || $filterDateStart || $filterDateEnd || $filterStatus !== 'all' || $filterTimeframe !== 'all' || $filterKeyPerson || $showDeleted;
         $timeframeLabelMap = collect($timeframeOptions)->pluck('name', 'id');
@@ -598,7 +604,7 @@ new class extends Component {
     @endphp
 
     {{-- HEADER --}}
-    <x-mary-header title="Meetings Management" subtitle="Manage schedules, agendas, and minutes." separator progress-indicator>
+    <x-mary-header  title="Meetings Management" subtitle="Manage schedules, agendas, and minutes." separator progress-indicator>
         <x-slot:middle class="!justify-end">
             <x-mary-input 
                 icon="o-magnifying-glass" 

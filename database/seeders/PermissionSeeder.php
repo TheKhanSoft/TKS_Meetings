@@ -70,6 +70,7 @@ class PermissionSeeder extends Seeder
             'view dashboard',
             'assign positions',
             'assign permissions',
+            'assign roles',
             
             // Meeting Specifics
             'download minutes',
@@ -96,22 +97,38 @@ class PermissionSeeder extends Seeder
             'VC' => [
                 'view meetings', 'view agenda items', 'view minutes', 
                 'view users', 'view positions', 'view employment statuses',
-                'view announcements', 'view notifications', 'view dashboard'
+                'view announcements', 'view notifications', 'view dashboard',
+                'view minutes pdf', 'view agenda pdf', 'download minutes', 'download agenda'
             ],
             'Registrar' => [
-                'view meetings', 'create meetings', 'edit meetings', 
-                'view agenda items', 'create agenda items', 
-                'view minutes', 'view dashboard',
+                'view meetings', 'create meetings', 'edit meetings', 'delete meetings', 'finalize meetings',
+                'view agenda items', 'create agenda items', 'edit agenda items', 'delete agenda items',
+                'view minutes', 'create minutes', 'edit minutes', 'delete minutes',
+                'view dashboard',
                 'view users', 'create users', 'edit users',
                 'view positions', 'create positions', 'edit positions',
                 'view employment statuses', 'create employment statuses', 'edit employment statuses',
-                'view announcements', 'create announcements',
-                'view notifications', 'create notifications'
+                'view announcements', 'create announcements', 'edit announcements', 'delete announcements',
+                'view notifications', 'create notifications',
+                'view participants', 'create participants', 'edit participants',
+                'view minutes pdf', 'view agenda pdf', 'download minutes', 'download agenda',
+                'assign positions'
             ],
-            'Director' => ['view meetings', 'view agenda items', 'view minutes', 'view announcements', 'view dashboard'],
-            'Dean' => ['view meetings', 'view minutes', 'view announcements', 'view dashboard'],
-            'Faculty' => ['view meetings', 'view announcements', 'view dashboard'],
-            'Staff' => ['view announcements', 'view dashboard'],
+            'Director' => [
+                'view meetings', 'view agenda items', 'view minutes', 
+                'view announcements', 'view dashboard',
+                'view minutes pdf', 'view agenda pdf', 'download minutes', 'download agenda'
+            ],
+            'Dean' => [
+                'view meetings', 'view minutes', 'view announcements', 'view dashboard',
+                'view minutes pdf', 'view agenda pdf'
+            ],
+            'Faculty' => [
+                'view meetings', 'view announcements', 'view dashboard'
+            ],
+            'Staff' => [
+                'view announcements', 'view dashboard'
+            ],
         ];
 
         foreach ($rolePermissions as $roleName => $perms) {

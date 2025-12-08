@@ -38,7 +38,7 @@ new class extends Component {
 
     public function mount(MeetingTypeService $service)
     {
-        if (!auth()->user()->can('view meeting_types')) {
+        if (!auth()->user()->can('view meeting types')) {
             $this->error('Unauthorized access to meeting types.');
             return $this->redirect(route('dashboard'), navigate: true);
         }
@@ -82,7 +82,7 @@ new class extends Component {
 
     public function create()
     {
-        if (!auth()->user()->can('create meeting_types')) {
+        if (!auth()->user()->can('create meeting types')) {
             abort(403);
         }
         $this->reset(['id', 'name', 'code', 'description', 'is_active']);
@@ -94,7 +94,7 @@ new class extends Component {
 
     public function edit(MeetingType $meetingType)
     {
-        if (!auth()->user()->can('edit meeting_types')) {
+        if (!auth()->user()->can('edit meeting types')) {
             abort(403);
         }
         $this->fillForm($meetingType);
@@ -151,7 +151,7 @@ new class extends Component {
 
     public function confirmDelete($id)
     {
-        if (!auth()->user()->can('delete meeting_types')) {
+        if (!auth()->user()->can('delete meeting types')) {
             abort(403);
         }
         $this->typeToDeleteId = $id;
@@ -160,7 +160,7 @@ new class extends Component {
 
     public function delete(MeetingTypeService $service)
     {
-        if (!auth()->user()->can('delete meeting_types')) {
+        if (!auth()->user()->can('delete meeting types')) {
             abort(403);
         }
         $service->deleteMeetingType(MeetingType::find($this->typeToDeleteId));
@@ -171,7 +171,7 @@ new class extends Component {
 
     public function restore($id)
     {
-        if (!auth()->user()->can('delete meeting_types')) {
+        if (!auth()->user()->can('delete meeting types')) {
             abort(403);
         }
         MeetingType::withTrashed()->find($id)->restore();
@@ -181,7 +181,7 @@ new class extends Component {
 
     public function toggleStatus($id)
     {
-        if (!auth()->user()->can('edit meeting_types')) {
+        if (!auth()->user()->can('edit meeting types')) {
             abort(403);
         }
         $meetingType = MeetingType::find($id);
@@ -339,7 +339,7 @@ new class extends Component {
             <x-mary-button icon="o-arrow-up-tray" class="btn-ghost" @click="$wire.showExportModal = true" tooltip="Export" />
             <x-mary-button icon="o-arrow-down-tray" class="btn-ghost" @click="$wire.showImportModal = true" tooltip="Import" />
             <x-mary-button icon="o-funnel" wire:click="$toggle('drawer')" class="btn-ghost" tooltip="Filter" />
-            @can('create meeting_types')
+            @can('create meeting types')
                 <x-mary-button icon="o-plus" class="btn-primary" wire:click="create" tooltip="Create Meeting Type" />
             @endcan
         </x-slot:actions>
@@ -356,13 +356,13 @@ new class extends Component {
         <x-mary-table :headers="$headers" :rows="$meetingTypes" striped @row-click="$wire.view($event.detail.row.id)">
             @scope('cell_is_active', $meetingType)
                 @if($meetingType->is_active)
-                    @can('edit meeting_types')
+                    @can('edit meeting types')
                         <x-mary-button icon="o-check-circle" class="btn-circle btn-ghost btn-sm text-success" wire:click.stop="toggleStatus({{ $meetingType->id }})" />
                     @else
                         <x-mary-icon name="o-check-circle" class="w-6 h-6 text-success" />
                     @endcan
                 @else
-                    @can('edit meeting_types')
+                    @can('edit meeting types')
                         <x-mary-button icon="o-x-circle" class="btn-circle btn-ghost btn-sm text-error" wire:click.stop="toggleStatus({{ $meetingType->id }})" />
                     @else
                         <x-mary-icon name="o-x-circle" class="w-6 h-6 text-error" />
@@ -372,17 +372,17 @@ new class extends Component {
             @scope('actions', $meetingType)
                 <div class="flex gap-0">
                     @if($meetingType->trashed())
-                        @can('delete meeting_types')
+                        @can('delete meeting types')
                             <x-mary-button icon="o-arrow-path" wire:click.stop="restore({{ $meetingType->id }})" spinner class="btn-sm btn-ghost text-green-500 px-1" tooltip="Restore" />
                         @endcan
                     @else
                         <x-mary-button icon="o-eye" wire:click.stop="view({{ $meetingType->id }})" spinner class="btn-sm btn-ghost px-1" tooltip="View" />
                         
-                        @can('edit meeting_types')
+                        @can('edit meeting types')
                             <x-mary-button icon="o-pencil" wire:click.stop="edit({{ $meetingType->id }})" spinner class="btn-sm btn-ghost text-blue-500 px-1" tooltip="Edit" />
                         @endcan
                         
-                        @can('delete meeting_types')
+                        @can('delete meeting types')
                             <x-mary-button icon="o-trash" wire:click.stop="confirmDelete({{ $meetingType->id }})" spinner class="btn-sm btn-ghost text-red-500 px-1" tooltip="Delete" />
                         @endcan
                     @endif

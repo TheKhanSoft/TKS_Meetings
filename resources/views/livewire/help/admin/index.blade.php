@@ -36,7 +36,7 @@ new class extends Component {
 
     public function mount()
     {
-        if (!auth()->user()->can('view help_categories') && !auth()->user()->can('view help_articles')) {
+        if (!auth()->user()->can('view help categories') && !auth()->user()->can('view help articles')) {
             $this->error('Unauthorized access to help management.');
             return $this->redirect(route('dashboard'), navigate: true);
         }
@@ -53,7 +53,7 @@ new class extends Component {
 
     public function createCategory()
     {
-        if (!auth()->user()->can('create help_categories')) {
+        if (!auth()->user()->can('create help categories')) {
             abort(403);
         }
         $this->reset(['category_id', 'category_name', 'category_description', 'category_order', 'category_is_active']);
@@ -63,7 +63,7 @@ new class extends Component {
 
     public function editCategory(HelpCategory $category)
     {
-        if (!auth()->user()->can('edit help_categories')) {
+        if (!auth()->user()->can('edit help categories')) {
             abort(403);
         }
         $this->category_id = $category->id;
@@ -92,13 +92,13 @@ new class extends Component {
         ];
 
         if ($this->category_id) {
-            if (!auth()->user()->can('edit help_categories')) {
+            if (!auth()->user()->can('edit help categories')) {
                 abort(403);
             }
             HelpCategory::find($this->category_id)->update($data);
             $this->success('Category updated.');
         } else {
-            if (!auth()->user()->can('create help_categories')) {
+            if (!auth()->user()->can('create help categories')) {
                 abort(403);
             }
             HelpCategory::create($data);
@@ -113,7 +113,7 @@ new class extends Component {
 
     public function createArticle()
     {
-        if (!auth()->user()->can('create help_articles')) {
+        if (!auth()->user()->can('create help articles')) {
             abort(403);
         }
         $this->reset(['article_id', 'article_title', 'article_content', 'article_category_id', 'article_is_published', 'article_order']);
@@ -124,7 +124,7 @@ new class extends Component {
 
     public function editArticle(HelpArticle $article)
     {
-        if (!auth()->user()->can('edit help_articles')) {
+        if (!auth()->user()->can('edit help articles')) {
             abort(403);
         }
         $this->article_id = $article->id;
@@ -156,13 +156,13 @@ new class extends Component {
         ];
 
         if ($this->article_id) {
-            if (!auth()->user()->can('edit help_articles')) {
+            if (!auth()->user()->can('edit help articles')) {
                 abort(403);
             }
             HelpArticle::find($this->article_id)->update($data);
             $this->success('Article updated.');
         } else {
-            if (!auth()->user()->can('create help_articles')) {
+            if (!auth()->user()->can('create help articles')) {
                 abort(403);
             }
             HelpArticle::create($data);
@@ -178,11 +178,11 @@ new class extends Component {
     public function confirmDelete($type, $id)
     {
         if ($type === 'category') {
-            if (!auth()->user()->can('delete help_categories')) {
+            if (!auth()->user()->can('delete help categories')) {
                 abort(403);
             }
         } else {
-            if (!auth()->user()->can('delete help_articles')) {
+            if (!auth()->user()->can('delete help articles')) {
                 abort(403);
             }
         }
@@ -194,13 +194,13 @@ new class extends Component {
     public function delete()
     {
         if ($this->deleteType === 'category') {
-            if (!auth()->user()->can('delete help_categories')) {
+            if (!auth()->user()->can('delete help categories')) {
                 abort(403);
             }
             HelpCategory::find($this->deleteId)->delete();
             $this->success('Category deleted.');
         } else {
-            if (!auth()->user()->can('delete help_articles')) {
+            if (!auth()->user()->can('delete help articles')) {
                 abort(403);
             }
             HelpArticle::find($this->deleteId)->delete();
@@ -212,7 +212,7 @@ new class extends Component {
 
     public function togglePublished($id)
     {
-        if (!auth()->user()->can('edit help_articles')) {
+        if (!auth()->user()->can('edit help articles')) {
             abort(403);
         }
         $article = HelpArticle::find($id);
@@ -225,10 +225,10 @@ new class extends Component {
 <div class="p-4 md:p-8 max-w-7xl mx-auto">
     <x-mary-header title="Help Center Management" subtitle="Manage categories and articles." separator>
         <x-slot:actions>
-            @can('create help_categories')
+            @can('create help categories')
                 <x-mary-button label="New Category" icon="o-folder-plus" wire:click="createCategory" class="btn-outline" />
             @endcan
-            @can('create help_articles')
+            @can('create help articles')
                 <x-mary-button label="New Article" icon="o-document-plus" wire:click="createArticle" class="btn-primary" />
             @endcan
         </x-slot:actions>
@@ -249,10 +249,10 @@ new class extends Component {
                         <div class="text-xs text-gray-500">{{ $category->articles->count() }} articles</div>
                     </div>
                     <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        @can('edit help_categories')
+                        @can('edit help categories')
                             <x-mary-button icon="o-pencil" wire:click="editCategory({{ $category->id }})" class="btn-xs btn-ghost" />
                         @endcan
-                        @can('delete help_categories')
+                        @can('delete help categories')
                             <x-mary-button icon="o-trash" wire:click="confirmDelete('category', {{ $category->id }})" class="btn-xs btn-ghost text-error" />
                         @endcan
                     </div>
@@ -289,7 +289,7 @@ new class extends Component {
                                         <x-mary-badge :value="$article->category->name ?? 'Uncategorized'" class="badge-ghost badge-sm" />
                                     </td>
                                     <td>
-                                        @can('edit help_articles')
+                                        @can('edit help articles')
                                             <button wire:click="togglePublished({{ $article->id }})" class="btn btn-xs {{ $article->is_published ? 'btn-success text-white' : 'btn-warning' }}">
                                                 {{ $article->is_published ? 'Published' : 'Draft' }}
                                             </button>
@@ -300,10 +300,10 @@ new class extends Component {
                                         @endcan
                                     </td>
                                     <td class="text-right">
-                                        @can('edit help_articles')
+                                        @can('edit help articles')
                                             <x-mary-button icon="o-pencil" wire:click="editArticle({{ $article->id }})" class="btn-sm btn-ghost" />
                                         @endcan
-                                        @can('delete help_articles')
+                                        @can('delete help articles')
                                             <x-mary-button icon="o-trash" wire:click="confirmDelete('article', {{ $article->id }})" class="btn-sm btn-ghost text-error" />
                                         @endcan
                                     </td>
