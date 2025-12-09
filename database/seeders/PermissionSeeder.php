@@ -78,6 +78,10 @@ class PermissionSeeder extends Seeder
             'download agenda',
             'view agenda pdf',
             'finalize meetings',
+            'publish meetings',
+            'manage meeting permissions',
+            'view meeting permissions',
+            'toggle meeting types',
         ];
 
         $permissions = array_merge($permissions, $specificPermissions);
@@ -101,7 +105,7 @@ class PermissionSeeder extends Seeder
                 'view minutes pdf', 'view agenda pdf', 'download minutes', 'download agenda'
             ],
             'Registrar' => [
-                'view meetings', 'create meetings', 'edit meetings', 'delete meetings', 'finalize meetings',
+                'view meetings', 'create meetings', 'edit meetings', 'delete meetings', 'finalize meetings', 'publish meetings',
                 'view agenda items', 'create agenda items', 'edit agenda items', 'delete agenda items',
                 'view minutes', 'create minutes', 'edit minutes', 'delete minutes',
                 'view dashboard',
@@ -112,7 +116,7 @@ class PermissionSeeder extends Seeder
                 'view notifications', 'create notifications',
                 'view participants', 'create participants', 'edit participants',
                 'view minutes pdf', 'view agenda pdf', 'download minutes', 'download agenda',
-                'assign positions'
+                'assign positions', 'manage meeting permissions', 'view meeting permissions', 'toggle meeting types'
             ],
             'Director' => [
                 'view meetings', 'view agenda items', 'view minutes', 

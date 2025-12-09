@@ -111,4 +111,9 @@ class MeetingPolicy
     {
         return $user->can('finalize meetings') && $user->hasMeetingPermission($meeting->meeting_type_id, 'edit');
     }
+
+    public function publish(User $user, Meeting $meeting)
+    {
+        return $user->can('publish meetings') && $user->hasMeetingPermission($meeting->meeting_type_id, 'publish');
+    }
 }

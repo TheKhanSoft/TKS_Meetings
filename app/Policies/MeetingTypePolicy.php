@@ -82,4 +82,14 @@ class MeetingTypePolicy
     {
         return $user->can('import meeting types');
     }
+
+    public function managePermissions(User $user, MeetingType $meetingType): bool
+    {
+        return $user->can('manage meeting permissions');
+    }
+
+    public function toggle(User $user, MeetingType $meetingType): bool
+    {
+        return $user->can('toggle meeting types');
+    }
 }

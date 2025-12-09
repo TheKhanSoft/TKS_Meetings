@@ -10,16 +10,26 @@ new class extends Component {
 
     public MeetingType $meetingType;
     public $users = [];
+    
+    // UI State
+    public $search = '';
+    public $showModal = false;
     public $selectedUser = null;
+    
+    // Add User Search
+    public $searchUserToAdd = '';
+    public $foundUsersToAdd = [];
+
+    // Permissions
     public $permissions = [];
     public $availablePermissions = ['view', 'create', 'edit', 'delete', 'publish'];
     
     public $permissionDescriptions = [
-        'view' => 'Can view meetings of this type',
+        'view' => 'Can view details and agendas',
         'create' => 'Can schedule new meetings',
-        'edit' => 'Can modify existing meetings',
-        'delete' => 'Can cancel/delete meetings',
-        'publish' => 'Can publish agendas and minutes'
+        'edit' => 'Can update agenda items',
+        'delete' => 'Can cancel meetings',
+        'publish' => 'Can publish official minutes'
     ];
 
     public $permissionIcons = [
@@ -30,86 +40,79 @@ new class extends Component {
         'publish' => 'o-megaphone'
     ];
 
-    public $showModal = false;
-    
-    public $stats = [
-        'total' => 0,
-        'full_access' => 0,
-        'partial_access' => 0
-    ];
-
-    public $headers = [
-        ['key' => 'name', 'label' => 'User'],
-        ['key' => 'permissions', 'label' => 'Permissions', 'sortable' => false],
-        ['key' => 'pivot.created_at', 'label' => 'Added On', 'class' => 'hidden md:table-cell'],
-        ['key' => 'actions', 'label' => 'Actions', 'sortable' => false, 'class' => 'w-20'],
-    ];
-
-    // Search
-    public $searchUser = '';
-    public $foundUsers = [];
-
     public function mount(MeetingType $meetingType)
     {
+        $this->authorize('managePermissions', $meetingType);
         $this->meetingType = $meetingType;
         $this->loadUsers();
     }
 
     public function loadUsers()
     {
-        // Explicitly select pivot columns to ensure they are loaded
-        $this->users = $this->meetingType->users()
-            ->withPivot(['permissions', 'created_at', 'updated_at'])
-            ->get();
-        
-        $this->stats['total'] = $this->users->count();
-        
-        $availableCount = count($this->availablePermissions);
-        
-        $this->stats['full_access'] = $this->users->filter(function($user) use ($availableCount) {
-            $pivot = $user->pivot ?? null;
-            if (!$pivot) return false;
-            
-            $perms = $pivot->permissions;
-            if (is_string($perms)) $perms = json_decode($perms, true);
-            
-            return count($perms ?? []) === $availableCount;
-        })->count();
+        $query = $this->meetingType->users()->withPivot(['permissions', 'created_at']);
 
-        $this->stats['partial_access'] = $this->stats['total'] - $this->stats['full_access'];
+        if ($this->search) {
+            $query->where(function($q) {
+                $q->where('name', 'like', "%{$this->search}%")
+                  ->orWhere('email', 'like', "%{$this->search}%");
+            });
+        }
+
+        $this->users = $query->get();
     }
 
-    public function updatedShowModal($value)
+    public function updatedSearchUserToAdd($value)
     {
-        if (!$value) {
-            $this->loadUsers();
-            $this->selectedUser = null;
-            $this->permissions = [];
+        if(strlen($value) > 2) {
+            $existingIds = $this->meetingType->users()->pluck('users.id')->toArray();
+            
+            $this->foundUsersToAdd = User::where(function($q) use ($value) {
+                    $q->where('name', 'like', "%$value%")
+                      ->orWhere('email', 'like', "%$value%");
+                })
+                ->whereNotIn('id', $existingIds)
+                ->limit(5)
+                ->get();
+        } else {
+            $this->foundUsersToAdd = [];
         }
+    }
+
+    public function updatedSearch() 
+    {
+        $this->loadUsers();
+    }
+
+    public function addUser($userId)
+    {
+        $this->meetingType->users()->syncWithoutDetaching([
+            $userId => ['permissions' => json_encode(['view'])] 
+        ]);
+        
+        $this->searchUserToAdd = '';
+        $this->foundUsersToAdd = [];
+        $this->loadUsers();
+        $this->edit($userId); 
+        $this->success('User added. Please configure permissions.');
     }
 
     public function edit($userId)
     {
         $this->selectedUser = $userId;
-        // Fetch fresh user data with pivot
-        $user = $this->meetingType->users()->where('user_id', $userId)->first();
         
+        // Always fetch fresh permission data from DB to ensure accuracy
+        // This prevents the "stale data" issue when re-opening the modal
+        $user = $this->meetingType->users()
+                    ->withPivot('permissions')
+                    ->where('user_id', $userId)
+                    ->first();
+
         if ($user && $user->pivot) {
-            $pivot = $user->pivot;
-            // Handle both string (JSON) and array (casted) cases
-            $permissions = $pivot->permissions;
-            
-            if (is_string($permissions)) {
-                $decoded = json_decode($permissions, true);
-                $this->permissions = is_array($decoded) ? $decoded : [];
-            } elseif (is_array($permissions)) {
-                $this->permissions = $permissions;
-            } else {
-                $this->permissions = [];
-            }
-            
-            // Ensure we have a clean array of strings
-            $this->permissions = array_values($this->permissions);
+            $perms = $user->pivot->permissions;
+            // Handle JSON string or Array cast
+            $this->permissions = is_string($perms) ? json_decode($perms, true) : ($perms ?? []);
+            // Force to array
+            $this->permissions = array_values(is_array($this->permissions) ? $this->permissions : []);
         } else {
             $this->permissions = [];
         }
@@ -134,201 +137,280 @@ new class extends Component {
                     'permissions' => json_encode($this->permissions)
                 ]
             ]);
-            $this->success('Permissions updated');
+            $this->success('Permissions updated successfully');
+            $this->loadUsers(); // Refresh grid ONLY on save
         }
         
         $this->showModal = false;
-        $this->loadUsers();
     }
     
     public function remove($userId)
     {
         $this->meetingType->users()->detach($userId);
-        $this->success('User removed');
+        $this->success('User access revoked');
         $this->showModal = false;
-        $this->loadUsers();
+        $this->loadUsers(); // Refresh grid on remove
     }
-    
-    public function updatedSearchUser($value)
+
+    public function getStatsProperty() 
     {
-        if(strlen($value) > 2) {
-            // Exclude already added users
-            $existingIds = $this->users->pluck('id')->toArray();
+        if (!$this->users) return ['total' => 0, 'full_access' => 0, 'partial' => 0];
+
+        $total = $this->users->count();
+        $full = 0;
+        
+        foreach($this->users as $u) {
+            $pivot = $u->pivot ?? null;
+            if (!$pivot) continue;
+
+            $p = $pivot->permissions;
+            $p = is_string($p) ? json_decode($p, true) : $p;
             
-            $this->foundUsers = User::where(function($q) use ($value) {
-                    $q->where('name', 'like', "%$value%")
-                      ->orWhere('email', 'like', "%$value%");
-                })
-                ->whereNotIn('id', $existingIds)
-                ->limit(5)
-                ->get();
-        } else {
-            $this->foundUsers = [];
+            if(count($p ?? []) === count($this->availablePermissions)) $full++;
         }
-    }
-    
-    public function addUser($userId)
-    {
-        $this->meetingType->users()->syncWithoutDetaching([
-            $userId => ['permissions' => json_encode([])]
-        ]);
-        $this->loadUsers(); // Reload to get the new user in the list
-        $this->edit($userId); // Open drawer for the new user
-        $this->searchUser = '';
-        $this->foundUsers = [];
+
+        return [
+            'total' => $total,
+            'full_access' => $full,
+            'partial' => $total - $full
+        ];
     }
 }; ?>
 
-<div>
-    <x-mary-header title="Permissions: {{ $meetingType->name }}" separator>
-        <x-slot:actions>
-            <x-mary-button label="Back" link="{{ route('meeting-types.index') }}" icon="o-arrow-left" class="btn-ghost" />
-        </x-slot:actions>
-    </x-mary-header>
-
-    <div class="grid grid-cols-3 gap-4 mb-6">
-        <x-mary-stat title="Total Users" value="{{ $stats['total'] }}" icon="o-users" class="shadow-sm" />
-        <x-mary-stat title="Full Access" value="{{ $stats['full_access'] }}" icon="o-shield-check" class="shadow-sm" />
-        <x-mary-stat title="Partial Access" value="{{ $stats['partial_access'] }}" icon="o-shield-exclamation" class="shadow-sm" />
-    </div>
-
-    <div class="mb-6 relative">
-        <div class="flex gap-2">
-            <div class="flex-1 relative">
-                <x-mary-input placeholder="Search user by name or email to add..." wire:model.live.debounce.300ms="searchUser" icon="o-user-plus" spinner />
-                @if($searchUser)
-                    <button wire:click="$set('searchUser', '')" class="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
-                        <x-mary-icon name="o-x-mark" class="w-5 h-5" />
-                    </button>
-                @endif
+<div class="space-y-8">
+    {{-- Header --}}
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-base-200 pb-6">
+        <div>
+            <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                <a href="{{ route('meeting-types.index') }}" class="hover:text-primary transition-colors flex items-center gap-1">
+                    <x-mary-icon name="o-arrow-left" class="w-3 h-3" /> Types
+                </a>
+                <span>/</span>
+                <span>Configuration</span>
             </div>
+            <h1 class="text-3xl font-bold text-base-content">{{ $meetingType->name }}</h1>
+            <p class="text-base-content/60">Manage user access control lists for this meeting type.</p>
         </div>
-        @if(count($foundUsers) > 0)
-            <div class="bg-base-100 shadow-xl rounded-lg p-2 absolute z-50 w-full mt-1 border border-base-300 max-h-60 overflow-y-auto">
-                @foreach($foundUsers as $user)
-                    <div class="p-3 hover:bg-base-200 cursor-pointer rounded-lg flex justify-between items-center transition-colors" wire:click="addUser({{ $user->id }})">
-                        <div class="flex items-center gap-3">
-                            <div class="avatar placeholder">
-                                <div class="bg-neutral text-neutral-content rounded-full w-8">
-                                    <span class="text-xs">{{ substr($user->name, 0, 2) }}</span>
+        
+        {{-- Search Add --}}
+        <div class="relative w-full md:w-80">
+            <x-mary-input 
+                placeholder="Add new user..." 
+                icon="o-user-plus" 
+                wire:model.live.debounce.300ms="searchUserToAdd"
+                class="input-primary bg-base-100"
+            />
+            
+            @if(!empty($foundUsersToAdd))
+                <div class="absolute z-50 top-full left-0 right-0 mt-2 bg-base-100 rounded-xl shadow-xl border border-base-200 overflow-hidden">
+                    <div class="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider bg-base-200/50">Found Users</div>
+                    @foreach($foundUsersToAdd as $user)
+                        <div wire:click="addUser({{ $user->id }})" class="px-4 py-3 hover:bg-primary/10 cursor-pointer flex items-center justify-between transition-colors group">
+                            <div class="flex items-center gap-3">
+                                {{-- Small Avatar in Dropdown --}}
+                                <div class="avatar {{ $user->avatar ? '' : 'placeholder' }}">
+                                    @if($user->avatar)
+                                        <div class="w-8 rounded-full">
+                                            <img src="{{ $user->avatar }}" />
+                                        </div>
+                                    @else
+                                        <div class="bg-neutral text-neutral-content rounded-full w-8 content-center grid place-items-center">
+                                            <span class="text-xs">{{ substr($user->name, 0, 2) }}</span>
+                                        </div>
+                                    @endif
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-sm">{{ $user->name }}</div>
+                                    <div class="text-xs text-gray-500">{{ $user->email }}</div>
                                 </div>
                             </div>
-                            <div>
-                                <div class="font-bold text-sm">{{ $user->name }}</div>
-                                <div class="text-xs opacity-70">{{ $user->email }}</div>
-                            </div>
+                            <x-mary-icon name="o-plus" class="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
-                        <x-mary-button icon="o-plus" class="btn-xs btn-ghost" />
-                    </div>
-                @endforeach
-            </div>
-        @elseif(strlen($searchUser) > 2)
-            <div class="bg-base-100 shadow-xl rounded-lg p-4 absolute z-50 w-full mt-1 border border-base-300 text-center opacity-70">
-                No users found.
-            </div>
-        @endif
+                    @endforeach
+                </div>
+            @endif
+        </div>
     </div>
 
-    <x-mary-card shadow class="rounded-2xl">
-        <x-mary-table :headers="$headers" :rows="$users">
-            @scope('cell_name', $user)
-                <div class="flex items-center gap-3">
-                    <div class="avatar placeholder">
-                        <div class="bg-neutral text-neutral-content rounded-full w-10">
-                            <span class="text-xs">{{ substr($user->name, 0, 2) }}</span>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="font-bold">{{ $user->name }}</div>
-                        <div class="text-xs opacity-70">{{ $user->email }}</div>
-                    </div>
-                </div>
-            @endscope
-            @scope('cell_permissions', $user)
+    {{-- Stats --}}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="stat bg-base-100 shadow-sm border border-base-200 rounded-xl">
+            <div class="stat-figure text-primary"><x-mary-icon name="o-users" class="w-8 h-8 opacity-20" /></div>
+            <div class="stat-title">Total Users</div>
+            <div class="stat-value text-primary">{{ $this->stats['total'] }}</div>
+        </div>
+        <div class="stat bg-base-100 shadow-sm border border-base-200 rounded-xl">
+            <div class="stat-figure text-success"><x-mary-icon name="o-shield-check" class="w-8 h-8 opacity-20" /></div>
+            <div class="stat-title">Full Access</div>
+            <div class="stat-value text-success">{{ $this->stats['full_access'] }}</div>
+        </div>
+        <div class="stat bg-base-100 shadow-sm border border-base-200 rounded-xl">
+            <div class="stat-figure text-warning"><x-mary-icon name="o-adjustments-horizontal" class="w-8 h-8 opacity-20" /></div>
+            <div class="stat-title">Partial Access</div>
+            <div class="stat-value text-warning">{{ $this->stats['partial'] }}</div>
+        </div>
+    </div>
+
+    {{-- Users Grid --}}
+    <div>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="font-bold text-lg">Assigned Users</h2>
+            <x-mary-input icon="o-magnifying-glass" placeholder="Filter users..." wire:model.live.debounce="search" class="input-sm w-64" />
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            @forelse($users as $user)
                 @php
                     $pivot = $user->pivot ?? null;
-                    $perms = $pivot && is_string($pivot->permissions) ? json_decode($pivot->permissions, true) : ($pivot->permissions ?? []);
-                    $isFullAccess = count($perms ?? []) === count($availablePermissions ?? []);
+                    $perms = ($pivot && is_string($pivot->permissions)) ? json_decode($pivot->permissions, true) : ($pivot->permissions ?? []);
+                    $isFullAccess = count($perms ?? []) === count($availablePermissions);
                 @endphp
-                <div class="flex flex-wrap gap-1">
-                    @if($isFullAccess)
-                        <x-mary-badge value="Full Access" class="badge-success badge-sm" icon="o-check-badge" />
-                    @else
-                        @forelse($perms ?? [] as $perm)
-                            <x-mary-badge :value="ucfirst($perm)" class="badge-primary badge-sm" />
-                        @empty
-                            <span class="text-xs opacity-50 italic">No permissions</span>
-                        @endforelse
-                    @endif
-                </div>
-            @endscope
-            @scope('cell_pivot.created_at', $user)
-                <div class="text-xs opacity-70 hidden md:block">
-                    {{ optional($user->pivot)->created_at ? $user->pivot->created_at->format('M d, Y') : '-' }}
-                </div>
-            @endscope
-            @scope('actions', $user)
-                <div class="flex gap-1">
-                    <x-mary-button icon="o-pencil" wire:click="edit({{ $user->id }})" spinner class="btn-sm btn-ghost text-blue-500" tooltip="Edit Permissions" />
-                    <x-mary-button icon="o-trash" wire:click="remove({{ $user->id }})" wire:confirm="Are you sure you want to remove this user?" spinner class="btn-sm btn-ghost text-red-500" tooltip="Remove User" />
-                </div>
-            @endscope
-            <x-slot:empty>
-                <div class="flex flex-col items-center justify-center p-10 opacity-50">
-                    <x-mary-icon name="o-users" class="w-12 h-12 mb-2" />
-                    <div class="text-lg font-bold">No users assigned</div>
-                    <div class="text-sm">Search above to add users to this meeting type.</div>
-                </div>
-            </x-slot:empty>
-        </x-mary-table>
-    </x-mary-card>
 
-    <x-mary-modal wire:model="showModal" title="Edit Permissions" class="backdrop-blur" box-class="w-11/12 max-w-2xl">
-        @if($selectedUser)
-            <div class="mb-6 flex items-center gap-3 p-4 bg-base-200 rounded-lg">
-                <div class="avatar placeholder">
-                    <div class="bg-neutral text-neutral-content rounded-full w-12">
-                        <span class="text-xl">{{ substr($users->find($selectedUser)?->name, 0, 2) }}</span>
-                    </div>
-                </div>
-                <div>
-                    <div class="font-bold text-lg">{{ $users->find($selectedUser)?->name }}</div>
-                    <div class="text-sm opacity-70">{{ $users->find($selectedUser)?->email }}</div>
-                </div>
-            </div>
-        @endif
-        
-        <div class="flex justify-between items-center mb-4">
-            <h3 class="font-bold opacity-70">Access Control</h3>
-            <x-mary-button label="Toggle All" icon="o-check-circle" class="btn-xs btn-ghost" wire:click="toggleAll" />
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            @foreach($availablePermissions as $perm)
-                <div class="border border-base-300 rounded-xl p-4 hover:bg-base-200 transition-all duration-200 hover:shadow-md group">
-                    <div class="flex justify-between items-start">
-                        <div class="flex items-center gap-2">
-                            <div class="p-2 bg-base-100 rounded-lg group-hover:bg-white transition-colors">
-                                <x-mary-icon :name="$permissionIcons[$perm]" class="w-5 h-5 opacity-70" />
+                <div wire:key="user-{{ $user->id }}" class="card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-all duration-200 group">
+                    <div class="card-body p-5">
+                        {{-- Top: User Info --}}
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex items-center gap-3">
+                                {{-- 
+                                    AVATAR FIX:
+                                    1. Checks for $user->avatar (URL)
+                                    2. Fallback to Initials
+                                    3. "grid place-items-center" ensures text is perfectly centered
+                                --}}
+                                <div class="avatar {{ $user->avatar ? '' : 'placeholder' }}">
+                                    @if($user->avatar)
+                                        <div class="w-10 rounded-full">
+                                            <img src="{{ $user->avatar }}" alt="{{ $user->name }}" />
+                                        </div>
+                                    @else
+                                        <div class="bg-neutral text-neutral-content rounded-full w-10 content-center grid place-items-center">
+                                            <span class="text-xs font-bold">{{ substr($user->name, 0, 2) }}</span>
+                                        </div>
+                                    @endif
+                                </div>
+                                
+                                <div class="min-w-0">
+                                    <h3 class="font-bold text-base-content truncate" title="{{ $user->name }}">{{ $user->name }}</h3>
+                                    <p class="text-xs text-gray-500 truncate" title="{{ $user->email }}">{{ $user->email }}</p>
+                                </div>
                             </div>
-                            <div>
-                                <div class="font-bold">{{ ucfirst($perm) }}</div>
-                                <div class="text-xs opacity-60 mt-0.5 leading-tight">{{ $permissionDescriptions[$perm] ?? '' }}</div>
-                            </div>
+                            
+                            <x-mary-button 
+                                icon="o-pencil" 
+                                class="btn-ghost btn-sm btn-circle opacity-0 group-hover:opacity-100 transition-opacity" 
+                                wire:click="edit({{ $user->id }})" 
+                            />
                         </div>
-                        <x-mary-toggle wire:key="perm-{{ $perm }}" value="{{ $perm }}" wire:model="permissions" class="toggle-primary toggle-sm" />
+
+                        {{-- Middle: Permissions Visualization --}}
+                        <div class="min-h-[40px]">
+                            @if($isFullAccess)
+                                <div class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-success/10 text-success rounded-full text-xs font-bold border border-success/20">
+                                    <x-mary-icon name="o-shield-check" class="w-3.5 h-3.5" />
+                                    Full Access
+                                </div>
+                            @elseif(empty($perms))
+                                <div class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-base-200 text-gray-500 rounded-full text-xs font-bold">
+                                    <x-mary-icon name="o-no-symbol" class="w-3.5 h-3.5" />
+                                    No Access
+                                </div>
+                            @else
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach($perms as $perm)
+                                        <div class="p-1 rounded bg-primary/5 text-primary border border-primary/10" title="{{ ucfirst($perm) }}">
+                                            <x-mary-icon :name="$permissionIcons[$perm] ?? 'o-check'" class="w-3.5 h-3.5" />
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+
+                        {{-- Bottom: Meta --}}
+                        <div class="mt-4 pt-3 border-t border-base-200 flex justify-between items-center text-[10px] text-gray-400">
+                            <span>Added: {{ optional($pivot)->created_at ? $pivot->created_at->format('M d, Y') : 'N/A' }}</span>
+                            @if(!$isFullAccess)
+                                <span>{{ count($perms ?? []) }} Perms</span>
+                            @endif
+                        </div>
                     </div>
                 </div>
-            @endforeach
-        </div>
-        <x-slot:actions>
-            <div class="flex w-full justify-between">
-                <x-mary-button label="Remove User" icon="o-trash" class="btn-error btn-ghost text-red-500" wire:click="remove({{ $selectedUser }})" wire:confirm="Remove this user completely?" />
-                <div class="flex gap-2">
-                    <x-mary-button label="Cancel" wire:click="$set('showModal', false)" />
-                    <x-mary-button label="Save Changes" class="btn-primary" wire:click="save" spinner="save" />
+            @empty
+                <div class="col-span-full py-12 text-center bg-base-100 rounded-xl border border-dashed border-base-300">
+                    <div class="bg-base-200 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
+                        <x-mary-icon name="o-user-group" class="w-6 h-6 text-gray-400" />
+                    </div>
+                    <h3 class="font-bold">No users assigned</h3>
+                    <p class="text-sm text-gray-500">Use the search bar above to grant access to this meeting type.</p>
                 </div>
-            </div>
-        </x-slot:actions>
+            @endforelse
+        </div>
+    </div>
+
+    {{-- Edit Permissions Modal --}}
+    <x-mary-modal wire:model="showModal" class="backdrop-blur" box-class="w-11/12 max-w-lg">
+        @if($selectedUser)
+            @php 
+                $u = \App\Models\User::find($selectedUser); 
+            @endphp
+            
+            @if($u)
+                <x-mary-header :title="$u->name" :subtitle="$u->email" separator>
+                    {{-- Modal Header Avatar --}}
+                    <x-slot:middle>
+                        <div class="avatar {{ $u->avatar ? '' : 'placeholder' }}">
+                            @if($u->avatar)
+                                <div class="w-10 rounded-full">
+                                    <img src="{{ $u->avatar }}" />
+                                </div>
+                            @else
+                                <div class="bg-primary text-primary-content rounded-full w-10 content-center grid place-items-center">
+                                    <span class="text-sm font-bold">{{ substr($u->name, 0, 2) }}</span>
+                                </div>
+                            @endif
+                        </div>
+                    </x-slot:middle>
+                    <x-slot:actions>
+                        <x-mary-button 
+                            label="Toggle All" 
+                            class="btn-xs btn-ghost" 
+                            icon="o-adjustments-horizontal" 
+                            wire:click="toggleAll" 
+                        />
+                    </x-slot:actions>
+                </x-mary-header>
+
+                <div class="grid gap-3 py-2">
+                    @foreach($availablePermissions as $perm)
+                        <label class="flex items-center justify-between p-3 rounded-xl border border-base-200 cursor-pointer hover:bg-base-100 transition-colors {{ in_array($perm, $permissions) ? 'bg-primary/5 border-primary/30' : '' }}">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 rounded-lg {{ in_array($perm, $permissions) ? 'bg-primary text-primary-content' : 'bg-base-200 text-gray-500' }}">
+                                    <x-mary-icon :name="$permissionIcons[$perm]" class="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <div class="font-bold text-sm capitalize">{{ $perm }}</div>
+                                    <div class="text-xs opacity-60">{{ $permissionDescriptions[$perm] }}</div>
+                                </div>
+                            </div>
+                            <input type="checkbox" value="{{ $perm }}" wire:model="permissions" class="checkbox checkbox-primary checkbox-sm" />
+                        </label>
+                    @endforeach
+                </div>
+
+                <x-slot:actions>
+                    <div class="flex w-full justify-between items-center">
+                        <x-mary-button 
+                            label="Revoke Access" 
+                            class="btn-ghost text-error btn-sm" 
+                            wire:click="remove({{ $selectedUser }})" 
+                            wire:confirm="This will remove the user from this meeting type completely. Continue?" 
+                        />
+                        <div class="flex gap-2">
+                            <x-mary-button label="Cancel" @click="$wire.showModal = false" />
+                            <x-mary-button label="Save Changes" class="btn-primary" wire:click="save" spinner="save" />
+                        </div>
+                    </div>
+                </x-slot:actions>
+            @endif
+        @endif
     </x-mary-modal>
 </div>
