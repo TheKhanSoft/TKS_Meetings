@@ -108,13 +108,7 @@ new class extends Component {
         $completionRate = $totalItems > 0 ? round(($discussedItems / $totalItems) * 100) : 0;
         $lastMeeting = Meeting::where('date', '<', now())->orderBy('date', 'desc')->orderBy('time', 'desc')->first();
 
-        $announcements = Announcement::where('is_active', true)
-            ->where(function($q) {
-                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
-            })
-            ->where(function($q) {
-                $q->whereNull('expires_at')->orWhere('expires_at', '>=', now());
-            })
+        $announcements = Announcement::visible()
             ->latest()
             ->take(3)
             ->get();

@@ -82,6 +82,10 @@ class PermissionSeeder extends Seeder
             'manage meeting permissions',
             'view meeting permissions',
             'toggle meeting types',
+            'view hidden announcements',
+            'view scheduled announcements',
+            'edit all announcements',
+            'delete all announcements',
         ];
 
         $permissions = array_merge($permissions, $specificPermissions);
@@ -112,7 +116,8 @@ class PermissionSeeder extends Seeder
                 'view users', 'create users', 'edit users',
                 'view positions', 'create positions', 'edit positions',
                 'view employment statuses', 'create employment statuses', 'edit employment statuses',
-                'view announcements', 'create announcements', 'edit announcements', 'delete announcements',
+                'view announcements', 'create announcements', 'edit announcements', 'delete announcements', 
+                'view hidden announcements', 'edit all announcements', 'delete all announcements',
                 'view notifications', 'create notifications',
                 'view participants', 'create participants', 'edit participants',
                 'view minutes pdf', 'view agenda pdf', 'download minutes', 'download agenda',
